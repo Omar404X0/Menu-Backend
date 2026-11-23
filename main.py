@@ -26,7 +26,9 @@ class Item(BaseModel) :
     price : int
 
 
-
+@app.get('/health')
+def health():
+    return {'status': 'ok'}
 
 @app.get('/') 
 def show_items (): 

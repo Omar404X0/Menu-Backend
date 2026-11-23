@@ -1,11 +1,14 @@
-from sqlalchemy import Column,Integer,String,Float,ForeignKey,Table,create_engine 
-from sqlalchemy.orm import sessionmaker , declarative_base 
-from passlib.context import CryptContext
-
+import os
 from pathlib import Path
-pwd_pass = CryptContext(schemes=['bcrypt'],deprecated="auto")
 
-def hashfunction (password) : 
+from passlib.context import CryptContext
+from sqlalchemy import Column, Integer, String, Float, create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
+
+pwd_pass = CryptContext(schemes=['bcrypt'], deprecated="auto")
+
+
+def hashfunction(password):
     return pwd_pass.hash(password)
 
 
@@ -14,7 +17,21 @@ def verify_password(plain, hashed):
 
 
 BASE_DIR = Path(__file__).resolve().parent
-eng = create_engine(f"sqlite:///{BASE_DIR / 'main.db'}")
+
+DATABASE_URL = os.getenv('DATABASE_URL', f"sqlite:///{BASE_DIR / 'main.db'}")
+
+if DATABASE_URL.startswith('postgres://'):
+    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+
+if DATABASE_URL.startswith('postgresql'):
+    eng = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        connect_args={'connect_timeout': 15},
+    )
+else:
+    eng = create_engine(DATABASE_URL)
 
 
 menu = [
@@ -42,15 +59,11 @@ menu = [
 ]
 
 
-
-
-
-
 Base = declarative_base()
 
 
 Session_local = sessionmaker(bind=eng)
- 
+
 
 class Menu (Base) :
     __tablename__ ='menu'
@@ -61,32 +74,46 @@ class Menu (Base) :
 
 
 
-class Admin (Base) : 
+class Admin (Base) :
     __tablename__ ='admin'
     id = Column(Integer,primary_key=True)
     email=Column(String,nullable=False,unique=True)
     password =Column(String,nullable=False)
 
 
+def seed_menu():
+    session = Session_local()
+    try:
+        if session.query(Menu).count() == 0:
+            for item in menu:
+                session.add(Menu(**item))
+            session.commit()
+    finally:
+        session.close()
+
+
+def ensure_admin():
+    email = os.getenv('ADMIN_EMAIL')
+    password = os.getenv('ADMIN_PASSWORD')
+    if not email or not password:
+        return
+
+    session = Session_local()
+    try:
+        if not session.query(Admin).filter(Admin.email == email).first():
+            session.add(Admin(email=email, password=hashfunction(password)))
+            session.commit()
+    finally:
+        session.close()
+
 
 Base.metadata.create_all(eng)
 
+ensure_admin()
 
-if __name__ =='__main__' :
-    session= Session_local()
-    for item in menu :
-        session.add(Menu(**item))
-
-    
-    
-    session.commit()
-    session.close()
+if os.getenv('SEED_MENU') == '1':
+    seed_menu()
 
 
-if __name__ =='__main__' :
-    session= Session_local()
-    
-    session.add(Admin(email='o24@gmail.com',password=hashfunction('1234')))
-    session.commit()
-    session.close()
-
+if __name__ == '__main__':
+    seed_menu()

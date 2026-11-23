@@ -7,13 +7,13 @@ import secrets
 
 import os
 
-r = redis.Redis(host=os.getenv('REDIS_HOST', 'localhost'), port=6379, db=0, decode_responses=True)
+r = redis.from_url(os.getenv('REDIS_URL', 'redis://localhost:6379/0'), decode_responses=True)
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[os.getenv('FRONTEND_URL', 'http://localhost:3000')],
     allow_methods=["*"],
     allow_headers=["*"],
 )
